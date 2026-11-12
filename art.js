@@ -5,7 +5,10 @@
   const defaultSlots=plots.map(([u,v])=>iso(u,v));
   const TAU = Math.PI * 2;
   const noise = n => { const v = Math.sin(n*127.1 + 311.7)*43758.5453; return v-Math.floor(v); };
-  const groundCache=new WeakMap();  function drawIsland(canvas,time,buildings,selected){
+  const groundCache=new WeakMap();
+  const prefersReducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  function drawIsland(canvas,time,buildings,selected){
+    if (prefersReducedMotion()) time = 0;
     const slots=buildings?.map((b,i)=>b.pos?iso(b.pos.u,b.pos.v):defaultSlots[i])||defaultSlots;
     const g=canvas.getContext('2d'), w=canvas.clientWidth||900,h=canvas.clientHeight||520;
     const dpr=Math.min(window.devicePixelRatio||1,2);

@@ -52,9 +52,9 @@
     name.className = 'runName';
     name.textContent = run ? run.playerName : 'Your next tiny empire';
     const time = document.createElement('strong');
-    time.textContent = run ? formatElapsed(elapsed()) : 'Ready to begin';
+    time.textContent = run ? ' ' + formatElapsed(elapsed()) : ' Ready to begin';
     const status = document.createElement('small');
-    status.textContent = run?.completedAt ? 'BASE MAXED · VIEW RESULT' : run ? 'PLAYTHROUGH · TAP FOR GOALS' : 'TINY TYRANTS · v1.1';
+    status.textContent = run?.completedAt ? 'BASE MAXED · VIEW RESULT' : run ? 'PLAYTHROUGH · TAP FOR GOALS' : 'TINY TYRANTS · v1.2';
     runHud.append(name, time, status);
   }
 
@@ -184,11 +184,67 @@
     $('keepCurrent').onclick = () => { if (s.playthrough?.completedAt) showVictory(); else showStartScreen(); };
   }
 
+  function exportVillage() {
+    if (!window.TinyTyrantsStorage) return;
+    const json = window.TinyTyrantsStorage.exportSaveJson(s);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tiny-tyrants-' + (s.playthrough?.playerName ? s.playthrough.playerName.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'village') + '-backup.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    notice('Village exported as JSON backup');
+  }
+
+  function importVillage() {
+    if (!window.TinyTyrantsStorage) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const res = window.TinyTyrantsStorage.importSaveJson(ev.target.result);
+        if (!res.success) {
+          notice('Import failed: ' + res.error);
+          return;
+        }
+        showDialog('<div class="cap">RESTORE VILLAGE</div><h2>Import village backup?</h2>' +
+          '<p>This will replace your current village with the imported backup.</p>' +
+          '<div class="startFacts"><span>Town Hall ' + res.state.buildings[0].level + '</span>' +
+          '<span>' + (res.state.playthrough?.playerName || 'Village') + '</span>' +
+          '<span>' + res.state.gold.toLocaleString() + ' Gold</span></div>' +
+          '<button class="primary" id="confirmImport">Restore Village</button>' +
+          '<button class="secondary newRunButton" id="cancelImport">Cancel</button>');
+        $('confirmImport').onclick = () => {
+          try { localStorage.setItem(saveKey + ':previous-village', JSON.stringify(s)); } catch {}
+          s = res.state;
+          selected = 0;
+          mission = Math.max(1, s.stage);
+          save();
+          refresh();
+          renderHud();
+          releaseModal();
+          $('dialog').close();
+          notice('Village successfully restored!');
+        };
+        $('cancelImport').onclick = () => showStartScreen();
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
   function showStartScreen() {
     const existingVillage = s.buildings.some(b => b.type !== 'empty' && b.type !== 'hall') ||
       s.buildings[0].level > 1 || s.stage > 1 || Object.values(s.army).some(Boolean);
     showDialog('<div class="startLogo"><svg aria-hidden="true" viewBox="0 0 160 190">' + paths.crest + '</svg></div>' +
-      '<div class="cap">TINY TYRANTS · v1.1</div><h2>Your tiny empire starts here.</h2>' +
+      '<div class="cap">TINY TYRANTS · v1.2</div><h2>Your tiny empire starts here.</h2>' +
       '<p>Build a village from one Town Hall. Gather Gold and Elixir, recruit an army, and raid 15 enemy strongholds.</p>' +
       '<div class="startFacts"><span>Build your base</span><span>Train your army</span><span>Max your village</span></div>' +
       '<p>Your challenge: Town Hall 5, all building types, and every other plot upgraded to level 6. ' +
@@ -197,7 +253,8 @@
         (s.playthrough?.completedAt ? 'Continue Completed Village' : 'Continue Village') + '</button>' : '') +
       '<button class="' + (s.playthrough || existingVillage ? 'secondary newRunButton' : 'primary') +
       '" id="startFresh">Start New Game →</button>' +
-      '<p class="smallPrint">No account needed. Your village and timer save in this browser.</p>', 'startDialog');
+      '<button class="secondary newRunButton" id="startImport">Import Village Backup (.json)</button>' +
+      '<p class="smallPrint">No account needed. Your village and timer save in this browser with automatic backups.</p>', 'startDialog');
     launchOpen = true;
     $('close').hidden = true;
     if ($('resumeRun')) $('resumeRun').onclick = () => {
@@ -209,6 +266,7 @@
       }
     };
     $('startFresh').onclick = s.playthrough || existingVillage ? confirmNewGame : resetVillage;
+    if ($('startImport')) $('startImport').onclick = importVillage;
   }
 
   $('dialog').addEventListener('cancel', event => {
@@ -222,10 +280,14 @@
   };
   runHud.onclick = () => s.playthrough?.completedAt ? showVictory() : s.playthrough ? showGoals() : showStartScreen();
   $('help').onclick = () => {
-    showDialog('<div class="cap">VILLAGE HANDBOOK · v1.1</div><h2>How Tiny Tyrants works</h2>' +
+    showDialog('<div class="cap">VILLAGE HANDBOOK · v1.2</div><h2>How Tiny Tyrants works</h2>' +
       '<p>Build a Gold Mine, Elixir Collector and Army Camp first. Gold constructs buildings; Elixir recruits troops. ' +
-      'Two builders keep working while the game is closed.</p><h3>Why is there a timer?</h3>' + helpMarkup());
+      'Two builders keep working while the game is closed (up to 10 hours offline production).</p><h3>Tactical combat & saves</h3>' +
+      '<p>Use Pause (Space) and 2x Speed (S) during battles. Wall Breakers destroy gates; Giants draw enemy tower fire. ' +
+      'Save data is automatically verified and backed up with schema validation.</p><h3>Why is there a timer?</h3>' + helpMarkup());
     row('View completion goals', 'See exactly what your village still needs.', showGoals);
+    row('Export village backup (JSON)', 'Save your full village and timer to a JSON file.', exportVillage);
+    row('Import village backup (JSON)', 'Restore your village from a previously exported backup.', importVillage);
     row('Start screen', 'Read the introduction or start a fresh game.', showStartScreen);
   };
   window.TinyTyrantsProgress = { validName, formatElapsed, completionFacts };

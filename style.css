@@ -16,3 +16,16 @@
 @media(max-height:520px) and (min-width:601px){.runHud{top:84px;left:50%;transform:translateX(-50%);min-width:160px}.runHud strong{font-size:18px}}
 
 #close[hidden]{display:none!important}
+
+/* v1.2 Accessibility, Reduced-Motion, Advisor & Combat polish */
+.advisorBanner{position:fixed;z-index:3;top:66px;left:50%;transform:translateX(-50%);background:#1f392dd9;border:1px solid #738a6a;border-radius:20px;padding:4px 14px;font-size:12px;color:#f0e4c2;display:flex;align-items:center;gap:7px;box-shadow:0 3px 8px #0f241c50;pointer-events:none}
+.advisorBanner i{font-style:normal;font-size:14px}
+@media(max-width:780px){.advisorBanner{top:58px;max-width:88vw;font-size:11px;padding:3px 10px}}
+@media(max-width:600px){.advisorBanner{display:none}}
+.vf-head-actions{display:flex;gap:6px;align-items:center}
+.vf-head-actions button{font:inherit;font-weight:600;font-size:12px!important;padding:6px 11px;border-radius:7px;background:#243c3c;border:1px solid #637d7a;color:#f5ebdb;cursor:pointer}
+.vf-head-actions button:hover{background:#304e4e}
+@media(prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+  button{transition:none!important}
+}

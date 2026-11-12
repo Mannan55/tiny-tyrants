@@ -38,33 +38,68 @@ const troops={
 const ages=['Timber Village','Stone Village','Fortified Village','Royal Village','Citadel'];
 const atlas=[['Bramblewatch','A forest outpost on the edge of the Kingdom.'],['Copperwind Reach','An exposed mining hold above a copper gorge.'],['The Hollow Spire','A bastion among the cold highlands.'],['Mossgate Citadel','An arc battery troops the core of this amethyst moor.'],['Stormglass Crown','Three fortified gates defend the golden highlands.']];
 const structureIcon={cannon:'army',archery:'tower',mortar:'mine',arc:'crest',forge:'hall'};
-const initial={gold:350,grain:60,stage:1,wave:1,stars:{},last:Date.now(),sound:false,army:{vanguard:0,ranger:0,bulwark:0,sapper:0,weaver:0},buildings:['hall','empty','empty','empty','empty','empty','empty','empty','empty','empty','empty','empty'].map(type=>({type,level:type==='empty'?0:1}))};
+const initial=window.TinyTyrantsStorage ? window.TinyTyrantsStorage.createInitialState() : {gold:350,grain:60,stage:1,wave:1,stars:{},last:Date.now(),sound:false,army:{vanguard:0,ranger:0,bulwark:0,sapper:0,weaver:0},buildings:['hall','empty','empty','empty','empty','empty','empty','empty','empty','empty','empty','empty'].map(type=>({type,level:type==='empty'?0:1}))};
 const saveKey='tiny-tyrants-v1';
-let s=structuredClone(initial);
-try{
- const old=JSON.parse(localStorage.getItem(saveKey)||'null');
- if(old?.buildings?.length>=8&&old.buildings.every(b=>structures[b.type])){
-   Object.assign(s,old);s.buildings=old.buildings.slice(0,12);while(s.buildings.length<12)s.buildings.push({type:'empty',level:0});
-   if(!old.army){s.army={...initial.army,vanguard:Math.max(0,old.troops-Math.min(old.troops,2)),ranger:Math.min(old.troops,2)};const i=s.buildings.findIndex(b=>b.type==='empty');if(i>=0)s.buildings[i]={type:'cannon',level:1};}
- }
-}catch{}
+let s = window.TinyTyrantsStorage ? window.TinyTyrantsStorage.loadSavedGame().state : structuredClone(initial);
+if(!window.TinyTyrantsStorage){
+ try{
+  const old=JSON.parse(localStorage.getItem(saveKey)||'null');
+  if(old?.buildings?.length>=8&&old.buildings.every(b=>structures[b.type])){
+    Object.assign(s,old);s.buildings=old.buildings.slice(0,12);while(s.buildings.length<12)s.buildings.push({type:'empty',level:0});
+    if(!old.army){s.army={...initial.army,vanguard:Math.max(0,old.troops-Math.min(old.troops,2)),ranger:Math.min(old.troops,2)};const i=s.buildings.findIndex(b=>b.type==='empty');if(i>=0)s.buildings[i]={type:'cannon',level:1};}
+  }
+ }catch{}
+}
 const sum=type=>s.buildings.reduce((n,b)=>n+(b.type===type?b.level:0),0);
 const th=()=>Math.min(5,s.buildings[0].level), troopCount=()=>Object.values(s.army).reduce((a,b)=>a+b,0), capacity=()=>sum('barracks')?6+sum('barracks')*4:0;
-const save=()=>{try{localStorage.setItem(saveKey,JSON.stringify(s));}catch{}};
-let selected=0,mission=Math.max(1,s.stage),battle=false,toastTimer,audioCtx,lastPaint=0;
+const save=()=>{
+  if(window.TinyTyrantsStorage)window.TinyTyrantsStorage.saveGame(s);
+  else{try{localStorage.setItem(saveKey,JSON.stringify(s));}catch{}}
+};
+let selected=0,mission=Math.max(1,s.stage),battle=false,toastTimer,audioCtx,lastPaint=0,lastFocusedElement=null;
 function notice(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3200);}
 function chime(hz=470){if(!s.sound)return;try{audioCtx ||= new AudioContext();audioCtx.resume();const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();osc.frequency.value=hz;gain.gain.setValueAtTime(.045,audioCtx.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.2);osc.connect(gain);gain.connect(audioCtx.destination);osc.start();osc.stop(audioCtx.currentTime+.2);}catch{}}
-function produce(){const ticks=Math.min(720,Math.floor((Date.now()-s.last)/5000));if(ticks<=0)return;s.gold+=sum('mine')*ticks*3;s.grain+=sum('farm')*ticks*2;s.last=Date.now()-(Date.now()-s.last)%5000;save();}
+function produce(){
+  const now=Date.now();
+  if(now<s.last)s.last=now;
+  const elapsed=now-s.last;
+  const ticks=Math.min(7200,Math.floor(elapsed/5000));
+  if(ticks<=0)return;
+  s.gold+=sum('mine')*ticks*3;
+  s.grain+=sum('farm')*ticks*2;
+  s.last=now-(elapsed%5000);
+  save();
+}
 const ageLoot=()=>105+mission*38;
 const target=()=>atlas[(mission-1)%atlas.length][0];
 const hireCost=k=>Math.max(5,troops[k][2]-sum('forge')*2);
 const upgradeCost=b=>b.type==='hall'?[0,160,280,440,650][th()]||0:65*b.level;
 function unlocks(t){return [...Object.entries(structures).filter(([k,v])=>k!=='empty'&&v[1]===t).map(([,v])=>v[0]),...Object.values(troops).filter(v=>v[1]===t).map(v=>v[0])].join(' · ');}
-function modal(html){$('dialogBody').innerHTML=html;if(!$('dialog').open)$('dialog').showModal();}
+function modal(html){
+  lastFocusedElement=document.activeElement;
+  $('dialogBody').innerHTML=html;
+  if(!$('dialog').open)$('dialog').showModal();
+  const focusable=$('dialog').querySelector('button:not(:disabled), input:not(:disabled), [tabindex="0"]');
+  if(focusable)focusable.focus();
+}
 function row(label,desc,action,disabled=false){const b=document.createElement('button');b.className='actionCard';b.innerHTML=label+'<small>'+desc+'</small>';b.disabled=disabled;b.onclick=action;$('dialogBody').append(b);}
+function updateAdvisor(){
+  const el=$('advisorText');if(!el)return;
+  const nf=nextFoundation();
+  if(nf==='mine')el.textContent='Advisor: Build a Gold Mine on an open plot to produce construction gold.';
+  else if(nf==='farm')el.textContent='Advisor: Build an Elixir Collector to gather elixir for army recruitment.';
+  else if(nf==='barracks')el.textContent='Advisor: Build an Army Camp to expand army capacity and unlock recruitment.';
+  else if(troopCount()<1)el.textContent='Advisor: Open Army to recruit soldiers for campaign raids.';
+  else if(s.stage===1&&!s.stars[1])el.textContent='Advisor: Launch your first raid on Bramblewatch for victory spoils.';
+  else if(th()<2&&s.gold>=upgradeCost(s.buildings[0]))el.textContent='Advisor: Advance Town Hall to Age II to unlock Laboratory & Giants.';
+  else if(s.buildings.filter(b=>b.type==='cannon'||b.type==='archery').length===0)el.textContent='Advisor: Build defensive towers to protect your village.';
+  else if(s.wave===1)el.textContent='Advisor: Test your home defense perimeter in Defend Base.';
+  else el.textContent='Advisor: Upgrade buildings toward Town Hall 5 and level 6 plots.';
+}
 function refresh(){
  const b=s.buildings[selected],type=b.type,empty=type==='empty',limit=type==='hall'?5:th()+1,def=structures[type];
  $('gold').textContent=s.gold.toLocaleString();$('grain').textContent=s.grain.toLocaleString();$('rank').textContent='Town Hall '+th()+' · '+ages[th()-1];
+ updateAdvisor();
  $('selection').textContent=def[0];$('buildingBadge').innerHTML=icon(structureIcon[type]||type);$('buildingName').textContent=def[0];$('level').textContent=empty?'AVAILABLE SITE':'LEVEL '+b.level+(type==='hall'?'  /  '+ages[th()-1].toUpperCase():'');
  $('description').textContent=type==='hall'&&th()<5?'Next age: '+ages[th()]+'. Unlocks '+unlocks(th()+1)+'.':def[3];
  const stats={hall:['Settlement age',th()+' / 5'],mine:['Production',36*b.level+' gold/min'],farm:['Production',24*b.level+' elixir/min'],barracks:['Army spaces','+'+b.level*4],tower:['Rescue capacity',b.level+' / raid'],forge:['Recruitment discount',2*b.level],empty:['Construction plans','Choose below']};
@@ -131,7 +166,7 @@ processConstruction(false);produce();save();refresh();setInterval(()=>{if(!docum
     const total=Math.min(35,5+wave*2);
     const overlay=document.createElement('div');
     overlay.className='vf-siege';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Defend the Town Hall');
-    overlay.innerHTML='<style>'+css+'</style><div class="vf-frame"><div class="vf-head"><div><small>HOME FRONT · WAVE '+String(wave).padStart(2,'0')+'</small><h2>Hold the town hall</h2></div><button class="vf-leave">Withdraw</button></div><div class="vf-map"><canvas aria-label="Your village under siege. Tap an attacker or use Mark next."></canvas><div class="vf-stats"><strong>Town Hall</strong><div class="vf-health"><i><b></b></i><span></span></div></div><section class="vf-end" hidden><small>DEFENSE REPORT</small><h2></h2><p></p><button>Return to village</button></section></div><div class="vf-foot"><div><strong class="vf-counter"></strong><p>Mark a raider to focus your defenses. Fire a flare to strike nearby attackers.</p></div><div class="vf-tools"><button class="vf-mark">Mark next</button><button class="vf-fire">Fire flare</button></div></div><div class="vf-weaponlist"></div></div>';
+    overlay.innerHTML='<style>'+css+'</style><div class="vf-frame"><div class="vf-head"><div><small>HOME FRONT · WAVE '+String(wave).padStart(2,'0')+'</small><h2>Hold the town hall</h2></div><div class="vf-head-actions" style="display:flex;gap:6px;"><button class="vf-speed">1x Speed</button><button class="vf-pause">Pause</button><button class="vf-leave">Withdraw</button></div></div><div class="vf-map"><canvas aria-label="Your village under siege. Tap an attacker or use Mark next."></canvas><div class="vf-stats"><strong>Town Hall</strong><div class="vf-health"><i><b></b></i><span></span></div></div><section class="vf-end" hidden><small>DEFENSE REPORT</small><h2></h2><p></p><button>Return to village</button></section></div><div class="vf-foot"><div><strong class="vf-counter"></strong><p>Mark a raider to focus your defenses. Fire a flare to strike nearby attackers.</p></div><div class="vf-tools"><button class="vf-mark">Mark next</button><button class="vf-fire">Fire flare</button></div></div><div class="vf-weaponlist"></div></div>';
     const prevFocus=document.activeElement,prevOverflow=document.body.style.overflow;
     document.body.style.overflow='hidden';document.body.append(overlay);
     const q=s=>overlay.querySelector(s);
@@ -145,14 +180,13 @@ processConstruction(false);produce();save();refresh();setInterval(()=>{if(!docum
     }
     paintVillage(0);
     const hall=points[0],turrets=all.flatMap((b,i)=>weapons[b.type]&&points[i]?[{...weapons[b.type],...points[i],level:b.level,next:.6}]:[]);
-    // The hall garrison can fight even before the first defense is built.
     turrets.push({...hall,name:'Town guard',level,range:136,damage:8,delay:.97,color:'#ffeab3',next:0});
     const waves=[[-290,48],[-195,120],[220,105],[270,26]];
     const lanes=waves.map(([x,y])=>({x:hall.x+x,y:hall.y+y}));
     const walls=(all[0]?.layout?.walls||createDefaultWalls()).map(w=>({x:450+(5+(w.u-w.v)*69)*Math.min(900/920,520/525),y:(520-560*Math.min(900/920,520/525))/2+(298+(w.u+w.v)*33)*Math.min(900/920,520/525),hp:32}));
     const bombs=(all[0]?.layout?.traps||[]).map(t=>({x:450+(5+(t.u-t.v)*69)*Math.min(900/920,520/525),y:(520-560*Math.min(900/920,520/525))/2+(298+(t.u+t.v)*33)*Math.min(900/920,520/525),used:false}));
     const units=[],effects=[];let serial=0,kills=0,breaches=0,clock=0,untilSpawn=.45,last=0,backgroundAt=0;
-    let hp=100+level*18,max=hp,mark=null,ready=0,frame,done=false,closed=false,won=false,paused=false;
+    let hp=100+level*18,max=hp,mark=null,ready=0,frame,done=false,closed=false,won=false,paused=false,speed=1;
     const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
     const counts={};all.forEach(b=>{if(weapons[b.type])counts[b.type]=(counts[b.type]||0)+1;});
     q('.vf-weaponlist').textContent=['Town guard',...Object.keys(counts).map(k=>counts[k]+' × '+weapons[k].name)].join('   ·   ');
@@ -167,7 +201,10 @@ processConstruction(false);produce();save();refresh();setInterval(()=>{if(!docum
       ring(target.x,target.y,'#fff4a1',72);for(const u of units)if(distance(target,u)<72)u.hp-=29+level*3;
       ready=clock+5;
     }
+    function togglePauseDefense(){if(done)return;paused=!paused;q('.vf-pause').textContent=paused?'Resume':'Pause';}
+    function toggleSpeedDefense(){speed=speed===1?2:1;q('.vf-speed').textContent=speed+'x Speed';}
     q('.vf-mark').onclick=aim;q('.vf-fire').onclick=flare;
+    q('.vf-pause').onclick=togglePauseDefense;q('.vf-speed').onclick=toggleSpeedDefense;
     function status(){
       q('.vf-health b').style.width=Math.max(0,100*hp/max)+'%';q('.vf-health span').textContent=Math.ceil(Math.max(0,hp))+' / '+max;
       q('.vf-counter').textContent=kills+' repelled · '+breaches+' breached · '+Math.max(0,total-serial)+' approaching';
@@ -184,7 +221,15 @@ processConstruction(false);produce();save();refresh();setInterval(()=>{if(!docum
     }
     function withdraw(){if(done)return close();if(paused){paused=false;q('.vf-end').hidden=true;q('.vf-leave').textContent='Withdraw';return;}paused=true;q('.vf-end').hidden=false;q('.vf-end h2').textContent='Withdraw from defense?';q('.vf-end p').textContent='Withdrawing ends this wave in defeat.';q('.vf-end button').textContent='Confirm withdrawal';q('.vf-end button').onclick=()=>{won=false;close();};q('.vf-leave').textContent='Resume defense';}
     q('.vf-leave').onclick=withdraw;
-    function keys(e){if(e.key==='Tab'){const buttons=[...overlay.querySelectorAll('button')].filter(b=>!b.disabled&&b.offsetParent!==null);if(!buttons.length)return;const end=e.shiftKey?buttons[0]:buttons[buttons.length-1];if(document.activeElement===end){e.preventDefault();(e.shiftKey?buttons[buttons.length-1]:buttons[0]).focus();}return;}if(e.key==='Escape'){e.preventDefault();withdraw();}if(done||paused)return;if(e.key.toLowerCase()==='f')flare();if(e.key.toLowerCase()==='m')aim();}
+    function keys(e){
+      if(e.key==='Tab'){const buttons=[...overlay.querySelectorAll('button')].filter(b=>!b.disabled&&b.offsetParent!==null);if(!buttons.length)return;const end=e.shiftKey?buttons[0]:buttons[buttons.length-1];if(document.activeElement===end){e.preventDefault();(e.shiftKey?buttons[buttons.length-1]:buttons[0]).focus();}return;}
+      if(e.key==='Escape'){e.preventDefault();withdraw();}
+      if(e.key===' '){e.preventDefault();togglePauseDefense();return;}
+      if(e.key.toLowerCase()==='s'){e.preventDefault();toggleSpeedDefense();return;}
+      if(done||paused)return;
+      if(e.key.toLowerCase()==='f')flare();
+      if(e.key.toLowerCase()==='m')aim();
+    }
     document.addEventListener('keydown',keys);q('.vf-leave').focus();
     function size(){
       const w=canvas.clientWidth,h=canvas.clientHeight,d=Math.min(devicePixelRatio||1,2);
@@ -193,7 +238,9 @@ processConstruction(false);produce();save();refresh();setInterval(()=>{if(!docum
       return {w,h,d,scale,ox:(w-900*scale)/2,oy:(h-520*scale)/2};
     }
     canvas.onpointerdown=e=>{if(done||paused)return;const {scale,ox,oy}=size(),r=canvas.getBoundingClientRect(),p={x:(e.clientX-r.left-ox)/scale,y:(e.clientY-r.top-oy)/scale};const hit=units.filter(u=>u.hp>0&&distance(u,p)<37).sort((a,b)=>distance(a,p)-distance(b,p))[0];if(hit)mark=hit.id;};
-    function simulate(dt){
+    function simulate(rawDt){
+      if(paused)return;
+      const dt=rawDt*speed;
       for(const bomb of bombs){if(!bomb.used&&units.some(u=>u.hp>0&&Math.hypot(u.x-bomb.x,u.y-bomb.y)<27)){bomb.used=true;units.filter(u=>Math.hypot(u.x-bomb.x,u.y-bomb.y)<47).forEach(u=>u.hp-=65);ring(bomb.x,bomb.y,'#ffac50',49);}}
 
       clock+=dt;untilSpawn-=dt;
