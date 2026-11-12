@@ -1,0 +1,45 @@
+name: Test & Quality Gates
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Node.js Unit & Regression Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20.x, 22.x, 24.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Syntax verification (node --check)
+        run: |
+          node --check art.js
+          node --check storage.js
+          node --check raid.js
+          node --check game.js
+          node --check progression.js
+
+      - name: Run Save Reliability Tests
+        run: node --test tests/save-reliability.test.cjs
+
+      - name: Run Economy & Progression Tests
+        run: node --test tests/economy-progression.test.cjs
+
+      - name: Run Combat Simulation Tests
+        run: node --test tests/combat-simulation.test.cjs
+
+      - name: Run Legacy v1.1 Progression Regression Tests
+        run: node tests/progression.test.cjs
