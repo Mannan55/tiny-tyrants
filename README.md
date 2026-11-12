@@ -215,4 +215,4 @@ Contributions, bug reports, and suggestions are welcome! Please read [CONTRIBUTI
 
 ## License
 
-Proposed under the [MIT License](https://opensource.org/licenses/MIT). *(Subject to confirmation by repository owner).*
+This project is licensed under the [MIT License](LICENSE).
