@@ -1,4 +1,4 @@
-# Tiny Tyrants
+# Tiny Tyrants · v1.1
 
 ![Tiny Tyrants](Tiny-Tyrants-logo.svg)
 
@@ -7,6 +7,21 @@ Build a tiny village. Train a mighty army. Rule the kingdom.
 **[Play Tiny Tyrants](https://tiny-tyrants.netlify.app/)**
 
 Tiny Tyrants is a single-player village strategy game built with HTML, CSS, JavaScript, and Canvas.
+
+## What changed in v1.1
+
+- A start screen explains the game and the timed challenge.
+- Players choose a 2–20 character name before starting a run.
+- A visible playthrough timer survives reloads and counts time while the game is closed.
+- Maxing the village freezes the timer and shows a named congratulations screen.
+- Continue Village keeps the completed base; Start New Game resets the village and asks for a new name.
+- Help explains the timer, completion condition, and restart behavior.
+
+## Completion rules
+
+Reach Town Hall 5, build all nine other building types, and fill all eleven remaining plots with level 6 buildings. All construction and upgrades must finish. Campaign stars and troop research are optional for this ending.
+
+When a final upgrade finishes while the game is closed, the scheduled completion time is used. Existing v1.0 villages remain intact; their playthrough clock begins when the player registers a name in v1.1. Completed times remain frozen even if the player continues or later changes the base.
 
 ## Play
 
@@ -35,6 +50,8 @@ Progress is stored in localStorage on the current browser and site origin. Clear
 - game.js — economy, progression, construction, menus, home defense, and saving.
 - art.js — animated village and building renderer.
 - raid.js — campaign maps, troop deployment, and combat.
+- progression.js — player names, start screen, timer, completion, and restart.
+- tests/progression.test.cjs — dependency-free progression regression checks.
 - Tiny-Tyrants-logo.svg and Tiny-Tyrants-mark.svg — logo and emblem.
 
 ## Hosting
@@ -47,3 +64,16 @@ The current live game was deployed manually on Netlify. Uploading this repositor
 
 This release is a single-player browser game. It has no accounts, cloud saves, multiplayer, payments, or backend service.
 
+
+## Verification
+
+With Node.js installed, run:
+
+    node tests/progression.test.cjs
+
+The tests cover username validation, elapsed/offline timing, maximum-base rules, exact completion time, result persistence, and restart. Browser checks also covered the start screen, name entry, reload/resume, Help, phone timer placement, completion screen, Continue Village, and confirmed restart.
+
+## Version history
+
+- v1.0.0 — original Netlify launch.
+- v1.1.0 — named playthroughs, persistent completion timer, start screen, and max-base ending.

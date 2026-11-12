@@ -418,7 +418,7 @@ function queueBuild(index,type,price){
  save();refresh();notice(structures[type][0]+' construction started');
 }
 function processConstruction(announce=true){
- let changed=false;for(const b of s.buildings){if(b.job&&Date.now()>=b.job.finish){b.level=b.job.level;delete b.job;changed=true;if(announce)notice(structures[b.type][0]+' level '+b.level+' ready');}}
+ let changed=false;for(const b of s.buildings){if(b.job&&Date.now()>=b.job.finish){s.lastConstructionFinishedAt=Math.max(s.lastConstructionFinishedAt||0,b.job.finish);b.level=b.job.level;delete b.job;changed=true;if(announce)notice(structures[b.type][0]+' level '+b.level+' ready');}}
  if(changed)save();return changed;
 }
 function timeLeft(ms){const n=Math.max(0,Math.ceil(ms/1000));return n>=60?Math.floor(n/60)+'m '+n%60+'s':n+'s';}
